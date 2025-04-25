@@ -127,7 +127,6 @@ void SaveState() {
   if (!state_changed) return;
   state_changed = false;
 
-  // TODO INT TO BYTES
   byte _delaysB0[OUTPUT_COUNT];
   byte _delaysB1[OUTPUT_COUNT];
   byte b0, b1;
