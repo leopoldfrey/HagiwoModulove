@@ -44,6 +44,116 @@ bool update_display = true;
 
 unsigned long currentTime = 0;
 
+// Script state & storage variables.
+// Expected version string for this firmware.
+const char SCRIPT_NAME[] = "GATEDELAY";
+const byte SCRIPT_VER = 3;
+
+struct State {
+  // Version check.
+  char script[sizeof(SCRIPT_NAME)];
+  byte version;
+  // State variables.
+  byte delaysBYTE0[OUTPUT_COUNT];
+  byte delaysBYTE1[OUTPUT_COUNT];
+  byte clocks[OUTPUT_COUNT];
+};
+State state;
+
+bool state_changed = false;
+
+void intToByte(int i, byte &b0, byte &b1) {
+  b0 = i >> 8;
+  b1 = i & 0xFF;
+}
+
+int byteToInt(byte b0, byte b1) {
+  return (b0 << 8) + b1;
+}
+
+// Initialize script state from EEPROM or default values.
+void InitState() {
+  // Read previously put state from EEPROM memory. If it doesn't exist or
+  // match version, then populate the State struct with default values.
+  EEPROM.get(0, state);
+
+  // Check if the data in memory matches expected values.
+  if ((strcmp(state.script, SCRIPT_NAME) != 0) || (state.version != SCRIPT_VER)) {
+    // DEFAULT INIT
+    strcpy(state.script, SCRIPT_NAME);
+    state.version = SCRIPT_VER;
+
+    byte b0, b1;
+    intToByte(3500, b0, b1);
+    state.delaysBYTE0[0] = b0;
+    state.delaysBYTE1[0] = b1;
+    state.clocks[0] = 1;
+
+    intToByte(100, b0, b1);
+    state.delaysBYTE0[1] = b0;
+    state.delaysBYTE1[1] = b1;
+    state.clocks[1] = 0;
+
+    intToByte(1000, b0, b1);
+    state.delaysBYTE0[2] = b0;
+    state.delaysBYTE1[2] = b1;
+    state.clocks[2] = 0;
+
+    intToByte(500, b0, b1);
+    state.delaysBYTE0[3] = b0;
+    state.delaysBYTE1[3] = b1;
+    state.clocks[3] = 1;
+
+    intToByte(1000, b0, b1);
+    state.delaysBYTE0[4] = b0;
+    state.delaysBYTE1[4] = b1;
+    state.clocks[4] = 1;
+
+    intToByte(5000, b0, b1);
+    state.delaysBYTE0[5] = b0;
+    state.delaysBYTE1[5] = b1;
+    state.clocks[5] = 2;
+  }
+
+  // INIT FROM EEPROM
+  for (int i = 0; i < OUTPUT_COUNT; i++) {
+    int del = byteToInt(state.delaysBYTE0[i], state.delaysBYTE1[i]);
+    Clock c = state.clocks[i] == 0 ? CLOCK_A : (state.clocks[i] == 1 ? CLOCK_B : CLOCK_BOTH);
+    outputs[i].Init(hw.outputs[i], del, c);
+  }
+}
+
+void SaveState() {
+  if (!state_changed) return;
+  state_changed = false;
+
+  // TODO INT TO BYTES
+  byte _delaysB0[OUTPUT_COUNT];
+  byte _delaysB1[OUTPUT_COUNT];
+  byte b0, b1;
+  for (int i = 0; i < OUTPUT_COUNT; i++) {
+    intToByte(outputs[i].GetDelay(), b0, b1);
+    _delaysB0[i] = b0;
+    _delaysB1[i] = b1;
+  }
+
+  memcpy(state.delaysBYTE0, _delaysB0, sizeof(_delaysB0));
+  memcpy(state.delaysBYTE1, _delaysB1, sizeof(_delaysB1));
+
+  byte _clocks[OUTPUT_COUNT] = {
+    outputs[0].GetClockByte(),
+    outputs[1].GetClockByte(),
+    outputs[2].GetClockByte(),
+    outputs[3].GetClockByte(),
+    outputs[4].GetClockByte(),
+    outputs[5].GetClockByte(),
+  };
+
+  memcpy(state.clocks, _clocks, sizeof(_clocks));
+
+  EEPROM.put(0, state);
+}
+
 void setup() {
 // Only enable Serial monitoring if DEBUG is defined.
 // Note: this affects performance and locks LED 4 & 5 on HIGH.
@@ -72,12 +182,13 @@ void setup() {
   hw.Init();
 
   // Initialize each of the outputs with it's GPIO pins and probability.
-  outputs[0].Init(hw.outputs[0], 50, CLOCK_A);
+  InitState();
+  /*outputs[0].Init(hw.outputs[0], 50, CLOCK_A);
   outputs[1].Init(hw.outputs[1], 100, CLOCK_A);
   outputs[2].Init(hw.outputs[2], 1000, CLOCK_A);
   outputs[3].Init(hw.outputs[3], 500, CLOCK_B);
   outputs[4].Init(hw.outputs[4], 1000, CLOCK_B);
-  outputs[5].Init(hw.outputs[5], 5000, CLOCK_BOTH);
+  outputs[5].Init(hw.outputs[5], 5000, CLOCK_BOTH);//*/
 
   // CLOCK LED (DIGITAL)
   pinMode(CLOCK_LED, OUTPUT);
@@ -92,11 +203,12 @@ void setup() {
 void loop() {
   // Read inputs to determine state.
   hw.ProcessInputs();
-  
+
   currentTime = millis();
   for (int i = 0; i < OUTPUT_COUNT; i++)
     outputs[i].current(currentTime);
 
+  SaveState();
   UpdateDisplay();
 }
 
@@ -207,7 +319,7 @@ void LongPress(EncoderButton &eb) {
       break;
     case PAGE_MODE:
       selected_page = PAGE_MAIN;
-      selected_param = 0;
+      selected_param = 1;
       break;
   }
   update_display = true;
@@ -229,6 +341,7 @@ void UpdateParameter(EncoderButton &eb) {
         UpdateClock(dir);
       break;
   }
+  state_changed = true;
   update_display = true;
 }
 
@@ -237,7 +350,6 @@ void UpdateOutput(int dir) {
     selected_out++;
   if (dir == -1 && selected_out > 0)
     selected_out--;
-  update_display = true;
 }
 
 void UpdateDelay(int dir) {
@@ -251,13 +363,11 @@ void UpdateDelay(int dir) {
       outputs[selected_out].DecDelay();
     else
       outputs[selected_out].DecDelay2();
-  update_display = true;
 }
 
 void UpdateClock(int dir) {
   if (dir == 1) outputs[selected_out].IncClock();
   if (dir == -1) outputs[selected_out].DecClock();
-  update_display = true;
 }
 
 void UpdateDisplay() {

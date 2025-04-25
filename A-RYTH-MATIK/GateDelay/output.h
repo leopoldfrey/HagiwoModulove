@@ -7,9 +7,9 @@
 using namespace modulove;
 
 const int maxDelay = 5000;
-const int incDelay = 50;
+const int incDelay = 100;
 const int incDelay2 = 5;
-const int duration = 1000;
+//const int duration = 1000;
 
 enum DelayStage {
   DELAY,
@@ -128,6 +128,16 @@ public:
   }
   inline Clock GetClock() {
     return clock_;
+  }
+  inline byte GetClockByte() {
+    switch (clock_) {
+      case CLOCK_A:
+        return 0;
+      case CLOCK_B:
+        return 1;
+      case CLOCK_BOTH:
+        return 2;
+    } 
   }
   inline String DisplayClock() {
     switch (clock_) {
