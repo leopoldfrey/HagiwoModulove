@@ -32,10 +32,15 @@ int refrain_counter;
 int rand_val;
 
 int refrain = 1;
-int pattern_size_max = 16;
+int pattern_size_max = 32;
 int cv_max = MAX_INPUT;
-int cv_pattern[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-int pattern_options[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+int cv_pattern[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int pattern_options[16] = {
+                        2, 3, 4, 5, 
+                        6, 7, 8, 9
+                        10, 12, 14, 15, 
+                        16, 20, 24, 32
+                    };
 
 //unsigned long currentTime = 0, previousTime = 0;
 //#define TEMPO 200
@@ -77,7 +82,7 @@ void loop() {
     if (advance) {
         // Increment the current sequence step.
         // Right shift to scale input to a range of 8.
-        steps = pattern_options[(hw.p2.Read() >> 7)];
+        steps = pattern_options[(hw.p2.Read() >> 6)];
         step = (step + 1) % steps;
 
         // Increment Refrain at the first step of the sequence.
@@ -98,10 +103,10 @@ void loop() {
         debug();
         advance = false;
         
+        // Scale the max cv output range on clock
+        amplitude = hw.p3.Read();
     }
 
-    // Scale the max cv output range.
-    amplitude = hw.p3.Read();
 
     // Update PWM CV output value.
     output = map(cv_pattern[step], 0, cv_max, 0, amplitude);
